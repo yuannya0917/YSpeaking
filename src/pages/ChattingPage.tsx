@@ -18,6 +18,7 @@ const ChattingPage:React.FC=()=>{
                 
             </div>
             
+            <div></div>
             
         </div>
     )
