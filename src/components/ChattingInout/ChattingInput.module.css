@@ -1,0 +1,35 @@
+.chattingInput{
+    padding: 10px;
+    border: 1px solid #f0f0f0;
+    border-radius: 5px;
+    box-shadow: 0 0 5px 3px rgba(161, 161, 161, 0.1);
+}
+
+.chattingInput :global(.ant-input) {
+    border: none ;
+    padding: 5px;
+    box-shadow: none ;
+    background: transparent;
+}
+
+.chattingInputActions {
+    display: flex;
+    padding: 5px 0;
+    justify-content: end;
+}
+
+.chattingInputRecording{
+    margin: 2px;
+}
+
+.chattingInputSending.isSending :global(.ant-btn){
+    background-color: red;
+}
+
+.chattingInputSending.isSending :global(.ant-btn):hover{
+    background-color: red;
+}
+
+.chattingInputSending{
+    margin: 2px;
+}
