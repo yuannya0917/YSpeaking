@@ -1,41 +1,60 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { InboxOutlined } from '@ant-design/icons';
-import type { UploadProps } from 'antd';
-import { message, Upload } from 'antd';
-import styles from './ChattingUpload.module.css'; 
+import type { UploadFile, UploadProps } from 'antd';
+import { Upload } from 'antd';
+import styles from './ChattingUpload.module.css';
 
 const { Dragger } = Upload;
 
-const props: UploadProps = {
-  name: 'file',
-  multiple: true,
-  action: 'https://660d2bd96ddfa2943b33731c.mockapi.io/api/upload',
-  onChange(info) {
-    const { status } = info.file;
-    if (status !== 'uploading') {
-      console.log(info.file, info.fileList);
-    }
-    if (status === 'done') {
-      message.success(`${info.file.name} file uploaded successfully.`);
-    } else if (status === 'error') {
-      message.error(`${info.file.name} file upload failed.`);
-    }
-  },
-  onDrop(e) {
-    console.log('Dropped files', e.dataTransfer.files);
-  },
-};
+export const ChattingUpload: React.FC = () => {
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
 
-export const ChattingUpload: React.FC = () => (
-  <div className={styles.chattingUpload}>
-    <Dragger {...props}>
-    <div className={styles.draggerContent}>
-      <InboxOutlined ></InboxOutlined>
-      <p>点击上传文件或将音频文件拖拽至此处</p>
+  const props: UploadProps = {
+    name: 'file',
+    multiple: true,
+    action: 'https://660d2bd96ddfa2943b33731c.mockapi.io/api/upload',
+    beforeUpload:(file)=>{
+      setFileList(prev=>[...prev, file]);
+      return false; // 阻止自动上传
+    },
+    onDrop(e) {
+      console.log('Dropped files', e.dataTransfer.files);
+    },
+    showUploadList: false,
+  };
+
+  return (
+    <div className={styles.chattingUpload}>
+      <div className={styles.chattingUploadDragger}>
+        <Dragger
+          {...props}
+        >
+          <div className={styles.chattingUploadDraggerContent}>
+            <InboxOutlined ></InboxOutlined>
+            <p>点击上传文件或将音频文件拖拽至此处</p>
+          </div>
+        </Dragger>
+      </div>
+
+      <div >
+        <ul className={styles.chattingUploadFileList}>
+          {fileList.map((file) => (
+            <li
+              className={styles.chattingUploadFileItem} 
+              key={file.uid}>
+                <span className={styles.chattingUploadFileName}>{file.name}</span>
+                <span className={styles.chattingUploadFileSize}>
+                  {file.size !== undefined ? `${(file.size / 1024).toFixed(2)} KB` : '未知大小'}
+                </span>
+
+              </li>
+          ))}
+        </ul>
+      </div>
     </div>
-  </Dragger>
-  </div>
-  
-);
+
+
+  );
+}
 
 export default ChattingUpload;

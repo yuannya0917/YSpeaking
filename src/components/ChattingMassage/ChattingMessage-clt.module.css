@@ -1,0 +1,27 @@
+.cltChattingMessageWrapper{
+    margin: 20px 0;
+}
+
+.cltChattingMessage{
+    box-sizing: border-box;
+    padding: 0 10px;
+    display: flex;
+    justify-content: end;
+}
+
+.cltChattingMessageContent {
+    background-color: rgb(219, 219, 219);
+    text-align: left;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 14px;
+
+    word-break: break-word;
+}
+
+.cltChattingMessageActions{
+    display: flex;
+    padding: 4px 10px;
+    justify-content: end
+}
+

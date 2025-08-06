@@ -1,8 +1,12 @@
 .chattingUpload{
+    box-sizing: border-box;
+}
+
+.chattingUploadDragger{
     height: 100px;
 }
 
-.chattingUpload :global(.ant-upload){
+.chattingUploadDragger:global(.ant-upload){
     width: 100%;
     height: 100%;
     display: flex;
@@ -12,7 +16,7 @@
 
 
 
-.draggerContent {
+.chattingUploadDraggerContent {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -20,7 +24,41 @@
     color: #929292;;
 }
 
-.draggerContent :global(.anticon) {
+.chattingUploadDraggerContent :global(.anticon) {
     color: #1974c9;
     font-size: 28px;
+}
+
+.chattingUploadFileList {
+    font-size: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    overflow-x: auto;
+}
+
+.chattingUploadFileItem {
+    width: 170px;
+    height: 60px;
+    box-sizing: border-box;
+    padding: 10px 8px;
+    margin: 6px 2px;
+    border: 1px solid #dfdfdf;
+    border-radius: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.chattingUploadFileName {
+    display: block;
+    width: 100%;
+    white-space: nowrap;/*不换行*/
+    overflow: hidden;
+    text-overflow: ellipsis; /* 超出省略号 */
+}
+
+.chattingUploadFileSize{
+    font-size: 11px;
+    color: #929292;
 }

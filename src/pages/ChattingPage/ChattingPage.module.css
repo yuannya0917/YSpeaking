@@ -1,0 +1,62 @@
+.chattingPage{
+    width: 800px;
+    display: flex;
+    flex-direction: column;
+    
+}
+
+.chattingPageCltMessages{
+    flex:1;
+    padding: 50px 0 270px;
+    overflow-y: auto;
+}
+
+.chattingPageInput {
+    position: fixed;
+    margin: 0 auto;
+     max-width: 800px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    padding: 0 16px;
+    z-index: 100;
+
+}
+
+.chattingInput {
+    padding: 10px;
+    border: 1px solid #f0f0f0;
+    border-radius: 6px;
+    box-shadow: 0 0 5px 3px rgba(161, 161, 161, 0.1);
+}
+
+.chattingInput :global(.ant-input) {
+    border: none;
+    padding: 5px;
+    box-shadow: none;
+    background: transparent;
+}
+
+
+.chattingInputActions {
+    display: flex;
+    padding: 5px 0;
+    justify-content: end;
+}
+
+.chattingInputRecording {
+    margin: 2px;
+}
+
+.chattingInputSending.isSending :global(.ant-btn) {
+    background-color: red;
+}
+
+.chattingInputSending.isSending :global(.ant-btn):hover {
+    background-color: red;
+}
+
+.chattingInputSending {
+    margin: 2px;
+}
