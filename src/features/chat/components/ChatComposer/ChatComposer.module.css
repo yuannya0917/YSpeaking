@@ -1,0 +1,46 @@
+.inputArea {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px 20px 24px;
+    background: var(--color-surface);
+}
+
+.chattingInput {
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+    background: var(--color-surface);
+}
+
+.chattingInput :global(.ant-input) {
+    border: none;
+    padding: 6px;
+    box-shadow: none;
+    background: transparent;
+    font-size: 16px;
+}
+
+.chattingInput :global(.ant-input:focus) {
+    box-shadow: none;
+}
+
+.chattingInputActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 8px;
+}
+
+.chattingInputRecording,
+.chattingInputSending {
+    display: flex;
+}
+
+.helperText {
+    color: var(--color-muted);
+    font-size: 12px;
+}

@@ -1,0 +1,45 @@
+:root {
+  /* 全局字体 */
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* UI 绿色系色板 */
+  --green-50: #dbf0eb;  /* 极浅 */
+  --green-100: #b7e1d6; /* 浅色 */
+  --green-200: #a5d9cc; /* 基础色 */
+  --green-300: #6fc2ae; /* 深色 */
+  --green-400: #44a18a; /* 极深 */
+
+  /* 主题语义色 */
+  --color-primary: var(--green-300);
+  --color-primary-strong: var(--green-400);
+  --color-primary-soft: var(--green-200);
+  --color-surface: #ffffff;
+  --color-surface-subtle: var(--green-50);
+  --color-border: var(--green-200);
+  --color-text: #0f172a;
+  --color-muted: #6b7280;
+  --app-bg: var(--green-50);
+  --shadow-soft: 0 6px 18px rgba(68, 161, 138, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}

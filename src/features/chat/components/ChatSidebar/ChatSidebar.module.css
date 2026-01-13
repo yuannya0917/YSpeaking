@@ -1,0 +1,39 @@
+.sidebar {
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    color: var(--color-primary-strong);
+    border-right: 1px solid var(--color-border);
+}
+
+.sidebarHeader {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.brand {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.conversationList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 12px 12px;
+}
+
+.conversationItem {
+    padding: 10px 12px;
+    margin: 6px 0;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: inherit;
+
+}
+.activeConversation {
+    background: var(--color-surface);
+}
