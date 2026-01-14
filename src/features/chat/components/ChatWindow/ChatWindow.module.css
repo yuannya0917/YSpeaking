@@ -3,10 +3,44 @@
     display: flex;
     flex-direction: column;
     background: var(--color-surface);
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.chatMain {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
 }
 
 .chatHeader {
-    padding: 16px 20px;
+    flex: 0 0 auto;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 30;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    background: transparent;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.chatHeaderInner {
+    width: 100%;
+    margin: 0 auto;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    pointer-events: auto;
+    background: var(--color-surface);
 }
 
 .chatTitle {
@@ -15,14 +49,42 @@
     color: var(--color-primary-strong);
 }
 
-.chattingPageCltMessages {
+.messagesScrollArea {
     flex: 1;
     overflow-y: auto;
-    padding: 24px;
+    min-height: 0;
+    padding-top: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    scrollbar-gutter: stable;
+}
+
+.messagesContent {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+.composerDock {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    pointer-events: none;
+}
+
+.composerInner {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    pointer-events: auto;
 }
 
 .attachmentsPanel {
-    padding: 0 20px 12px;
+    padding: 12px 0 12px;
 }
 
 .attachmentsTitle {

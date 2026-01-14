@@ -1,5 +1,8 @@
 .layout {
     display: flex;
     height: 100vh;
+    height: 100dvh;
     background: var(--app-bg);
+    overflow: hidden;
+    min-width: 0;
 }

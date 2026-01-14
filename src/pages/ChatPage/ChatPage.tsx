@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import type { UploadFile } from 'antd'
+import type { RcFile } from 'antd/es/upload'
 import { ChatSidebar } from '../../features/chat/components/ChatSidebar/ChatSidebar'
 import { ChatWindow } from '../../features/chat/components/ChatWindow/ChatWindow'
 import Recorder from 'recorder-core'
@@ -10,11 +11,15 @@ import {
     listMessages,
     sendMessage,
     createConversation,
+    deleteConversation,
+    renameConversation,
     generateAssistantReply,
+    uploadAttachments,
     type Conversation,
     type ChatMessageModel,
     type ChatAttachment,
     type ChatCompletionMessage,
+    type ChatCompletionContent,
 } from '../../features/chat/api/mockChatApi'
 
 import styles from './ChatPage.module.css'
@@ -174,7 +179,121 @@ const ChatPage: React.FC = () => {
         setValue(draft)
     }, [activeConversationId, draftsByConversation])
 
-    // 发送文本与附件（模拟后端保存）
+    const fileToDataUrl = (file: RcFile) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = (err) => reject(err)
+        reader.readAsDataURL(file)
+    })
+
+    const fileToArrayBuffer = (file: RcFile) => new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as ArrayBuffer)
+        reader.onerror = (err) => reject(err)
+        reader.readAsArrayBuffer(file)
+    })
+
+    const fileToText = (file: RcFile, maxLen = 4000) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+            const content = (reader.result as string) || ''
+            resolve(content.slice(0, maxLen))
+        }
+        reader.onerror = (err) => reject(err)
+        reader.readAsText(file)
+    })
+
+    const truncateWithNotice = (text: string, maxLen = 4000) => {
+        if (text.length <= maxLen) return text
+        return `${text.slice(0, maxLen)}\n\n……(已截断，原文长度约 ${text.length} 字符)`
+    }
+
+    const buildImageContents = async (files: UploadFile[]): Promise<ChatCompletionContent[]> => {
+        const imageFiles = files.filter(f => f.type?.startsWith('image/') && f.originFileObj)
+        const contents: ChatCompletionContent[] = []
+        for (const img of imageFiles) {
+            const dataUrl = await fileToDataUrl(img.originFileObj as RcFile)
+            contents.push({
+                type: 'image_url',
+                image_url: { url: dataUrl },
+            })
+        }
+        return contents
+    }
+
+    const buildDocumentContents = async (files: UploadFile[]): Promise<ChatCompletionContent[]> => {
+        const docs = files.filter(f => !f.type?.startsWith('image/') && f.originFileObj)
+        const contents: ChatCompletionContent[] = []
+        const textLike = docs.filter(f => {
+            const name = f.name?.toLowerCase() || ''
+            const extText = /\.(txt|md|log|csv|tsv|yaml|yml|ini|conf|cfg)$/i.test(name)
+            return (
+                f.type?.startsWith('text/') ||
+                f.type === 'application/json' ||
+                (!f.type && extText)
+            )
+        })
+        for (const doc of textLike) {
+            try {
+                const text = await fileToText(doc.originFileObj as RcFile)
+                contents.push({
+                    type: 'text',
+                    text: `【文件:${doc.name}】\n${truncateWithNotice(text)}`,
+                })
+            } catch {
+                contents.push({
+                    type: 'text',
+                    text: `【文件:${doc.name}】无法读取内容（前端解析失败）`,
+                })
+            }
+        }
+
+        const docxLike = docs.filter(f =>
+            f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+            f.name.toLowerCase().endsWith('.docx')
+        )
+        if (docxLike.length > 0) {
+            const mammoth = await import('mammoth/mammoth.browser.js') as typeof import('mammoth/mammoth.browser.js')
+            for (const doc of docxLike) {
+                try {
+                    const buffer = await fileToArrayBuffer(doc.originFileObj as RcFile)
+                    const result = await mammoth.extractRawText({ arrayBuffer: buffer })
+                    const raw = (result.value || '').replace(/\s+/g, ' ').trim()
+                    const text = raw ? truncateWithNotice(raw) : '【内容为空或无法提取】'
+                    contents.push({
+                        type: 'text',
+                        text: `【文件:${doc.name}】\n${text}`,
+                    })
+                } catch {
+                    contents.push({
+                        type: 'text',
+                        text: `【文件:${doc.name}】无法读取内容（docx 解析失败）`,
+                    })
+                }
+            }
+        }
+        return contents
+    }
+
+    const buildAttachmentSummary = (
+        files: UploadFile[],
+        uploaded: ChatAttachment[] | undefined
+    ): ChatCompletionContent[] => {
+        if (!files.length) return []
+        const summaries: ChatCompletionContent[] = []
+        files.forEach(file => {
+            const url = uploaded?.find(a => a.uid === file.uid)?.url
+            const size = file.size ? `${(file.size / 1024).toFixed(1)} KB` : '未知大小'
+            const type = file.type || '未知类型'
+            summaries.push({
+                type: 'text',
+                text: `【附件:${file.name}】类型:${type} 大小:${size}${url ? ` 地址:${url}` : ''}`,
+            })
+        })
+        return summaries
+    }
+
+    // 发送文本与附件（模拟后端保存 + 传给 AI）
     const handleSend = async () => {
         if (aiReplying) return
         const text = value.trim()
@@ -184,9 +303,31 @@ const ChatPage: React.FC = () => {
 
         setAiReplying(true)
         try {
+            let attachmentsToSend: ChatAttachment[] | undefined
+            if (hasFiles) {
+                attachmentsToSend = await uploadAttachments(uploadedFiles)
+                if (!attachmentsToSend || attachmentsToSend.length === 0) {
+                    throw new Error('上传附件失败或未返回文件信息')
+                }
+            }
+
+            const textToSend = text
+                || (attachmentsToSend?.length
+                    ? `发送了附件：${attachmentsToSend.map(a => a.name || '未命名附件').join('、')}`
+                    : '')
+
+            const imageContents = hasFiles ? await buildImageContents(uploadedFiles) : []
+            const docContents = hasFiles ? await buildDocumentContents(uploadedFiles) : []
+            const summaryContents = hasFiles ? buildAttachmentSummary(uploadedFiles, attachmentsToSend) : []
+            const userContentChunks: ChatCompletionContent[] = []
+            if (textToSend) {
+                userContentChunks.push({ type: 'text', text: textToSend })
+            }
+            userContentChunks.push(...summaryContents, ...imageContents, ...docContents)
+
             const savedMessage = await sendMessage(activeConversationId, {
-                text,
-                attachments: hasFiles ? uploadedFiles : undefined,
+                text: textToSend,
+                attachments: attachmentsToSend,
                 role: 'user',
             })
 
@@ -198,23 +339,36 @@ const ChatPage: React.FC = () => {
                 }
             })
 
-            if (hasFiles && savedMessage.attachments && savedMessage.attachments.length > 0) {
-                const attachmentsToAppend = savedMessage.attachments
+            if (savedMessage.attachments && savedMessage.attachments.length > 0) {
                 setConversationAttachments(prev => {
                     const current = prev[activeConversationId] || []
                     return {
                         ...prev,
-                        [activeConversationId]: [...current, ...attachmentsToAppend],
+                        [activeConversationId]: [...current, ...savedMessage.attachments!],
                     }
                 })
             }
 
-            // 调用 Qwen 生成回复
+            // 调用 Qwen 生成回复（携带图片为多模态输入）
             const history = [...(conversationMessages[activeConversationId] || []), savedMessage]
-            const llmMessages: ChatCompletionMessage[] = history.map(msg => ({
-                role: msg.role ?? 'user',
-                content: msg.text,
-            }))
+            const llmMessages: ChatCompletionMessage[] = history.map(msg => {
+                const role = msg.role ?? 'user'
+                if (msg.id === savedMessage.id && userContentChunks.length > 0) {
+                    // 当前消息，使用多模态内容（文本+图片）
+                    if (userContentChunks.length === 1 && userContentChunks[0].type === 'text') {
+                        return { role, content: (userContentChunks[0] as Extract<ChatCompletionContent, { type: 'text' }>).text }
+                    }
+                    return { role, content: userContentChunks }
+                }
+
+                const attachmentNote = msg.attachments?.length
+                    ? `\n[附件] ${msg.attachments.map(a => a.name || a.uid).join('、')}`
+                    : ''
+                return {
+                    role,
+                    content: `${msg.text}${attachmentNote}`,
+                }
+            })
             const aiText = await generateAssistantReply(llmMessages)
             const aiMessage = await sendMessage(activeConversationId, {
                 text: aiText,
@@ -227,15 +381,16 @@ const ChatPage: React.FC = () => {
                     [activeConversationId]: [...current, aiMessage],
                 }
             })
-        } catch (error) {
-            console.error('发送或生成回复失败', error)
-        } finally {
+
             setValue('')
             setDraftsByConversation(prev => ({
                 ...prev,
                 [activeConversationId]: ''
             }))
             setUploadedFiles([])
+        } catch (error) {
+            console.error('发送或生成回复失败', error)
+        } finally {
             setAiReplying(false)
         }
     }
@@ -258,6 +413,66 @@ const ChatPage: React.FC = () => {
         setValue('')
     }
 
+    const handleDeleteConversation = async (id: string) => {
+        const prevConversations = conversations
+        const prevMessages = conversationMessages
+        const prevAttachments = conversationAttachments
+        const prevDrafts = draftsByConversation
+        const prevActiveId = activeConversationId
+        const prevValue = value
+
+        const nextConversations = prevConversations.filter(conv => conv.id !== id)
+        const removedIndex = prevConversations.findIndex(conv => conv.id === id)
+        const fallback = nextConversations[removedIndex] || nextConversations[removedIndex - 1] || nextConversations[0]
+        const nextActive = prevActiveId === id ? (fallback?.id || '') : prevActiveId
+
+        // 乐观更新 UI，先移除列表
+        setConversations(nextConversations)
+        setConversationMessages(prev => {
+            const next = { ...prev }
+            delete next[id]
+            return next
+        })
+        setConversationAttachments(prev => {
+            const next = { ...prev }
+            delete next[id]
+            return next
+        })
+        setDraftsByConversation(prev => {
+            const next = { ...prev }
+            delete next[id]
+            return next
+        })
+        setActiveConversationId(nextActive)
+        if (!nextActive) {
+            setValue('')
+        }
+
+        try {
+            await deleteConversation(id)
+        } catch (error) {
+            console.error('删除会话失败', error)
+            // 回滚
+            setConversations(prevConversations)
+            setConversationMessages(prevMessages)
+            setConversationAttachments(prevAttachments)
+            setDraftsByConversation(prevDrafts)
+            setActiveConversationId(prevActiveId)
+            setValue(prevValue)
+        }
+    }
+
+    const handleRenameConversation = async (id: string, title: string) => {
+        try {
+            const updated = await renameConversation(id, title)
+            setConversations(prev =>
+                prev.map(conv => (conv.id === id ? { ...conv, title: updated.title } : conv))
+            )
+        } catch (error) {
+            console.error('重命名失败', error)
+        }
+    }
+
     return (
         <div className={styles.layout}>
             <ChatSidebar
@@ -265,6 +480,8 @@ const ChatPage: React.FC = () => {
                 activeConversationId={activeConversationId}
                 onSelect={setActiveConversationId}
                 onCreate={handleCreateConversation}
+                onDelete={handleDeleteConversation}
+                onRename={handleRenameConversation}
             />
 
             <ChatWindow

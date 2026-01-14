@@ -10,6 +10,8 @@ interface ChatSidebarProps {
     activeConversationId: string
     onSelect: (id: string) => void
     onCreate: () => void
+    onDelete: (id: string) => void
+    onRename: (id: string, title: string) => void | Promise<void>
 }
 
 export const ChatSidebar: React.FC<ChatSidebarProps> = ({
@@ -17,6 +19,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
     activeConversationId,
     onSelect,
     onCreate,
+    onDelete,
+    onRename,
 }) => {
     return (
         <aside className={styles.sidebar}>
@@ -38,6 +42,8 @@ export const ChatSidebar: React.FC<ChatSidebarProps> = ({
                         conversation={conv}
                         isActive={conv.id === activeConversationId}
                         onSelect={onSelect}
+                        onDelete={onDelete}
+                        onRename={onRename}
                     />
                 ))}
             </div>

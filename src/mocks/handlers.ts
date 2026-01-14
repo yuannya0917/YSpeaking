@@ -235,6 +235,101 @@ export const handlers = [
     }),
 
     /**
+     * 删除会话及其消息。
+     *
+     * @param id 会话 id（path param）
+     * @returns 204 无内容
+     */
+    http.delete('/api/conversations/:id', async ({ params, request }) => {
+        await ensureStoreLoaded()
+        const scenario = getScenario(request.url)
+        await maybeSimulate(scenario)
+        const resp = scenarioResponse(scenario)
+        if (resp) return resp
+        await delay(80)
+        const convId = params.id as string
+        if (!convId) {
+            return HttpResponse.json({ message: 'conversationId required' }, { status: 400 })
+        }
+        store.conversations = store.conversations.filter(c => c.id !== convId)
+        delete store.messages[convId]
+        await persistStore()
+        return new HttpResponse(null, { status: 204 })
+    }),
+
+    /**
+     * 重命名会话。
+     *
+     * @param id 会话 id（path param）
+     * @returns 更新后的 `Conversation`
+     */
+    http.patch('/api/conversations/:id', async ({ params, request }) => {
+        await ensureStoreLoaded()
+        const scenario = getScenario(request.url)
+        await maybeSimulate(scenario)
+        const resp = scenarioResponse(scenario)
+        if (resp) return resp
+        await delay(100)
+        const convId = params.id as string
+        if (!convId) {
+            return HttpResponse.json({ message: 'conversationId required' }, { status: 400 })
+        }
+        const body = await request.json().catch(() => ({})) as { title?: string }
+        const title = body.title?.trim()
+        if (!title) {
+            return HttpResponse.json({ message: 'title required' }, { status: 400 })
+        }
+        const conv = store.conversations.find(c => c.id === convId)
+        if (!conv) {
+            return HttpResponse.json({ message: 'not found' }, { status: 404 })
+        }
+        conv.title = title
+        await persistStore()
+        return HttpResponse.json(conv, { status: 200 })
+    }),
+
+    /**
+     * 上传附件，返回带 url 的精简附件列表。
+     * - body: FormData，包含多文件字段 `files` 以及元信息 `meta`（JSON 字符串）
+     */
+    http.post('/api/uploads', async ({ request }) => {
+        await ensureStoreLoaded()
+        const formData = await request.formData().catch(() => null)
+        if (!formData) {
+            return HttpResponse.json({ message: 'invalid form data' }, { status: 400 })
+        }
+
+        const metaRaw = formData.get('meta')
+        let meta: Array<{ uid: string; name?: string; size?: number; type?: string }> = []
+        if (typeof metaRaw === 'string') {
+            try {
+                meta = JSON.parse(metaRaw)
+            } catch {
+                // ignore malformed meta, fallback to defaults
+            }
+        }
+
+        const files = formData.getAll('files').filter((f): f is File => f instanceof File)
+        if (!files.length) {
+            return HttpResponse.json({ message: 'no files' }, { status: 400 })
+        }
+
+        const attachments: ChatAttachment[] = files.map((file, index) => {
+            const info = meta[index]
+            const uid = info?.uid || `upload-${Date.now()}-${index}`
+            return {
+                uid,
+                name: info?.name || file.name,
+                size: info?.size ?? file.size,
+                type: info?.type ?? file.type,
+                url: `/uploads/${encodeURIComponent(uid)}`,
+            }
+        })
+
+        return HttpResponse.json({ attachments }, { status: 201 })
+    }),
+
+    /**
      * 获取指定会话的消息列表。
      * - 返回按 `createdAt` 升序排序后的列表（保证展示顺序稳定）
      *
