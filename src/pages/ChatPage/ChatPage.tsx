@@ -10,33 +10,35 @@ import {
     listMessages,
     sendMessage,
     createConversation,
+    generateAssistantReply,
     type Conversation,
     type ChatMessageModel,
-    type ChatAttachment
+    type ChatAttachment,
+    type ChatCompletionMessage,
 } from '../../features/chat/api/mockChatApi'
 
 import styles from './ChatPage.module.css'
 
 const ChatPage: React.FC = () => {
-    // 录音实例、服务端消息缓存、语音转写 WebSocket
-    const recRef = useRef<any>(null)
-    const serverMessageRef = useRef<any>(null)
-    const senVoiWsRef = useRef<WebSocket | null>(null)
+    // 录音实例 & 服务端回传缓存
+    const recRef = useRef<any>(null) // recorder-core 实例
+    const serverMessageRef = useRef<any>(null) // 最近一次 WS 回包
+    const senVoiWsRef = useRef<WebSocket | null>(null) // 语音转写 WS 连接
     // 文本输入区
-    const [value, setValue] = useState<string>('')
-    const [prevValue, setPrevValue] = useState<string>('') // 录音前的输入值，用于拼接转写
-    const [recording, setRecording] = useState(false)
+    const [value, setValue] = useState<string>('') // 输入框当前内容（含草稿/转写）
+    const [recording, setRecording] = useState(false) // 是否录音中
     // 文件上传
-    const [uploadedFiles, setUploadedFiles] = useState<UploadFile[]>([])
+    const [uploadedFiles, setUploadedFiles] = useState<UploadFile[]>([]) // 待发送附件
     // 语音转写返回
-    const [serverMessagesIsFinal, setServerMessageIsFinal] = useState(false)
-    const [serverMessages, setServerMessages] = useState<string>('')
+    const [serverMessagesIsFinal, setServerMessageIsFinal] = useState(false) // WS 是否标记最终
+    const [serverMessages, setServerMessages] = useState<string>('') // WS 增量转写内容
     // 会话与消息（模拟后端）
-    const [conversations, setConversations] = useState<Conversation[]>([])
-    const [conversationMessages, setConversationMessages] = useState<Record<string, ChatMessageModel[]>>({})
-    const [conversationAttachments, setConversationAttachments] = useState<Record<string, ChatAttachment[]>>({})
-    const [draftsByConversation, setDraftsByConversation] = useState<Record<string, string>>({})
-    const [activeConversationId, setActiveConversationId] = useState('')
+    const [conversations, setConversations] = useState<Conversation[]>([]) // 会话列表
+    const [conversationMessages, setConversationMessages] = useState<Record<string, ChatMessageModel[]>>({}) // 各会话消息
+    const [conversationAttachments, setConversationAttachments] = useState<Record<string, ChatAttachment[]>>({}) // 各会话附件
+    const [draftsByConversation, setDraftsByConversation] = useState<Record<string, string>>({}) // 各会话草稿
+    const [activeConversationId, setActiveConversationId] = useState('') // 当前选中会话 ID
+    const [aiReplying, setAiReplying] = useState(false) // AI 是否在回复中
     const activeConversation = conversations.find(c => c.id === activeConversationId)
 
     // 初次加载会话列表（模拟后端）
@@ -113,17 +115,21 @@ const ChatPage: React.FC = () => {
     // 将转写内容实时合并到输入框，收到 is_final 时清空临时文本
     useEffect(() => {
         if (!activeConversationId) return
-        const mergedValue = prevValue + serverMessages
-        setValue(mergedValue)
-        setDraftsByConversation(prev => ({
-            ...prev,
-            [activeConversationId]: mergedValue
-        }))
-        if (serverMessagesIsFinal) {
-            setPrevValue(mergedValue)
-            setServerMessages('')
-        }
-    }, [serverMessages, serverMessagesIsFinal, activeConversationId, prevValue])
+        // 仅在有新转写或最终标记时处理，避免与手动输入互相触发循环
+        if (!serverMessages && !serverMessagesIsFinal) return
+        setValue((prev) => {
+            const mergedValue = prev + serverMessages
+            setDraftsByConversation(drafts => ({
+                ...drafts,
+                [activeConversationId]: mergedValue
+            }))
+            if (serverMessagesIsFinal) {
+                setServerMessages('')
+                setServerMessageIsFinal(false)
+            }
+            return mergedValue
+        })
+    }, [serverMessages, serverMessagesIsFinal, activeConversationId])
 
     // 开始录音：使用 recorder-core 采集 mp3，并在回调中把分片发到 WS
     const startRecording = async () => {
@@ -156,7 +162,6 @@ const ChatPage: React.FC = () => {
             recRef.current.close(() => {
                 console.log('录音已停止并关闭')
                 recRef.current = null
-                setPrevValue('')
                 setRecording(false)
             })
         }
@@ -167,51 +172,75 @@ const ChatPage: React.FC = () => {
         if (!activeConversationId) return
         const draft = draftsByConversation[activeConversationId] || ''
         setValue(draft)
-        setPrevValue(draft)
     }, [activeConversationId, draftsByConversation])
 
     // 发送文本与附件（模拟后端保存）
     const handleSend = async () => {
+        if (aiReplying) return
         const text = value.trim()
         const hasFiles = uploadedFiles.length > 0
         if (!text && !hasFiles) return
         if (!activeConversationId) return
 
-        const savedMessage = await sendMessage(activeConversationId, {
-            text,
-            attachments: hasFiles ? uploadedFiles : undefined,
-            role: 'user',
-        })
+        setAiReplying(true)
+        try {
+            const savedMessage = await sendMessage(activeConversationId, {
+                text,
+                attachments: hasFiles ? uploadedFiles : undefined,
+                role: 'user',
+            })
 
-        setConversationMessages(prev => {
-            const current = prev[activeConversationId] || []
-            return {
-                ...prev,
-                [activeConversationId]: [...current, savedMessage]
-            }
-        })
-
-        if (hasFiles && savedMessage.attachments && savedMessage.attachments.length > 0) {
-            const attachmentsToAppend = savedMessage.attachments
-            setConversationAttachments(prev => {
+            setConversationMessages(prev => {
                 const current = prev[activeConversationId] || []
                 return {
                     ...prev,
-                    [activeConversationId]: [...current, ...attachmentsToAppend]
+                    [activeConversationId]: [...current, savedMessage],
                 }
             })
-        }
 
-        setValue('')
-        setDraftsByConversation(prev => ({
-            ...prev,
-            [activeConversationId]: ''
-        }))
-        setUploadedFiles([])
+            if (hasFiles && savedMessage.attachments && savedMessage.attachments.length > 0) {
+                const attachmentsToAppend = savedMessage.attachments
+                setConversationAttachments(prev => {
+                    const current = prev[activeConversationId] || []
+                    return {
+                        ...prev,
+                        [activeConversationId]: [...current, ...attachmentsToAppend],
+                    }
+                })
+            }
+
+            // 调用 Qwen 生成回复
+            const history = [...(conversationMessages[activeConversationId] || []), savedMessage]
+            const llmMessages: ChatCompletionMessage[] = history.map(msg => ({
+                role: msg.role ?? 'user',
+                content: msg.text,
+            }))
+            const aiText = await generateAssistantReply(llmMessages)
+            const aiMessage = await sendMessage(activeConversationId, {
+                text: aiText,
+                role: 'assistant',
+            })
+            setConversationMessages(prev => {
+                const current = prev[activeConversationId] || []
+                return {
+                    ...prev,
+                    [activeConversationId]: [...current, aiMessage],
+                }
+            })
+        } catch (error) {
+            console.error('发送或生成回复失败', error)
+        } finally {
+            setValue('')
+            setDraftsByConversation(prev => ({
+                ...prev,
+                [activeConversationId]: ''
+            }))
+            setUploadedFiles([])
+            setAiReplying(false)
+        }
     }
 
     const handleInputChange = (nextValue: string) => {
-        setPrevValue(nextValue)
         setValue(nextValue)
         setDraftsByConversation(prev => ({
             ...prev,
@@ -227,7 +256,6 @@ const ChatPage: React.FC = () => {
         setDraftsByConversation(prev => ({ ...prev, [newConv.id]: '' }))
         setActiveConversationId(newConv.id)
         setValue('')
-        setPrevValue('')
     }
 
     return (

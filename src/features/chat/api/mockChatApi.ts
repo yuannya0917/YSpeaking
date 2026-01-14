@@ -24,6 +24,12 @@ interface SendMessagePayload {
 }
 
 const API_BASE = '/api'
+const AI_PROXY_URL = import.meta.env.VITE_QWEN_PROXY_URL
+
+export type ChatCompletionMessage = {
+    role: 'system' | 'user' | 'assistant'
+    content: string
+}
 
 const sanitizeAttachment = (file: UploadFile): ChatAttachment => {
     const { uid, name, size, type, url } = file
@@ -65,3 +71,36 @@ export const sendMessage = (conversationId: string, payload: SendMessagePayload)
             role: payload.role ?? 'user',
         }),
     })
+
+export const generateAssistantReply = async (
+    messages: ChatCompletionMessage[],
+    model = 'qwen-turbo'
+): Promise<string> => {
+    if (!AI_PROXY_URL) {
+        throw new Error('缺少 Qwen 代理地址，请设置 VITE_QWEN_PROXY_URL')
+    }
+
+    const res = await fetch(AI_PROXY_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model,
+            stream: false,
+            messages,
+        }),
+    })
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`AI 请求失败 ${res.status}: ${text || res.statusText}`)
+    }
+
+    const data = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>
+    }
+    const content = data.choices?.[0]?.message?.content
+    if (!content) throw new Error('AI 返回内容为空')
+    return content
+}

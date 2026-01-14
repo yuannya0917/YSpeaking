@@ -1,9 +1,24 @@
 import { http, HttpResponse, delay } from 'msw'
 import type { Conversation, ChatAttachment, ChatMessageModel } from '../features/chat/api/mockChatApi'
 
+/**
+ * 获取当前时间的 ISO 字符串。
+ * - 用于 mock 数据的 `createdAt` 字段，保持格式统一、便于排序/展示。
+ *
+ * @returns 当前时间的 ISO 8601 字符串（UTC），例如 `2026-01-13T02:03:04.567Z`
+ */
 const nowIso = () => new Date().toISOString()
 
+/**
+ * 缓存名称：用于在浏览器 Cache Storage 中持久化 mock 的对话/消息数据。
+ * - 版本号变更可以用于“自然清空”旧缓存。
+ */
 const CACHE_NAME = 'yspeaking-mock-chat-cache-v1'
+
+/**
+ * 缓存 key：用一个固定的 Request 作为 cache 的索引。
+ * - 这个 URL 不需要真的存在，只用于 cache.put/match。
+ */
 const CACHE_KEY = new Request('/__msw-cache/mock-chat')
 
 const defaultStore: {
@@ -41,6 +56,16 @@ const defaultStore: {
 let store: typeof defaultStore = JSON.parse(JSON.stringify(defaultStore))
 let storeLoaded = false
 
+/**
+ * 将当前 `store` 写入 Cache Storage 以便刷新后还能恢复。
+ * - 失败时仅打印 warn，不阻塞主流程（mock 环境不应因为缓存失败而不可用）。
+ *
+ * @remarks
+ * - 使用浏览器 `Cache Storage`（而非 localStorage），避免同步 API 阻塞主线程。
+ * - 写入失败常见原因：非安全上下文、浏览器禁用/无痕策略、容量限制等。
+ *
+ * @returns Promise<void>
+ */
 const persistStore = async () => {
     try {
         const cache = await caches.open(CACHE_NAME)
@@ -55,6 +80,16 @@ const persistStore = async () => {
     }
 }
 
+/**
+ * 从 Cache Storage 读取 `store`，并在结构不完整时回退到默认值。
+ * - conversations：必须是数组，否则使用 `defaultStore.conversations`
+ * - messages：以默认 messages 为底，再合并缓存中的 messages（避免缺 key）
+ *
+ * @remarks
+ * - 读取/解析失败会回退到 `defaultStore`，确保 mock 不会“坏在缓存上”。
+ *
+ * @returns Promise<void>
+ */
 const loadStore = async () => {
     try {
         const cache = await caches.open(CACHE_NAME)
@@ -71,12 +106,25 @@ const loadStore = async () => {
     }
 }
 
+/**
+ * 确保 `store` 已经从缓存加载过（只会加载一次）。
+ * - 每个 handler 的入口都会调用，避免首次请求读不到持久化数据。
+ *
+ * @returns Promise<void>
+ */
 const ensureStoreLoaded = async () => {
     if (storeLoaded) return
     await loadStore()
     storeLoaded = true
 }
 
+/**
+ * 清洗/标准化附件对象，避免无效数据进入 store。
+ * - 约定：没有 `uid` 的附件视为无效，返回 undefined
+ *
+ * @param att 可能不完整/来自外部请求的附件对象
+ * @returns 标准化后的附件；若无 `uid` 则返回 undefined（表示该附件无效）
+ */
 const sanitizeAttachment = (att?: Partial<ChatAttachment>): ChatAttachment | undefined => {
     if (!att?.uid) return undefined
     return {
@@ -90,6 +138,15 @@ const sanitizeAttachment = (att?: Partial<ChatAttachment>): ChatAttachment | und
 
 type Scenario = 'error' | 'timeout' | 'unauthorized' | null
 
+/**
+ * 通过 URL query 参数解析“场景”，用于 mock 各类异常/超时。
+ * - `?scenario=error`  -> 500
+ * - `?scenario=timeout`-> 超时（长延迟）
+ * - `?scenario=401`    -> 401
+ *
+ * @param url 请求 URL（字符串形式）
+ * @returns 解析出的场景；解析失败或未命中则返回 null
+ */
 const getScenario = (url: string): Scenario => {
     try {
         const search = new URL(url).searchParams.get('scenario')
@@ -102,6 +159,13 @@ const getScenario = (url: string): Scenario => {
     return null
 }
 
+/**
+ * 根据场景做副作用模拟（目前仅模拟超时）。
+ * - 与 `scenarioResponse` 配合：先 sleep，再决定是否返回错误响应。
+ *
+ * @param scenario 由 `getScenario` 解析得到的场景
+ * @returns Promise<void>
+ */
 const maybeSimulate = async (scenario: Scenario) => {
     if (scenario === 'timeout') {
         // 模拟超时：长延迟
@@ -109,6 +173,13 @@ const maybeSimulate = async (scenario: Scenario) => {
     }
 }
 
+/**
+ * 根据场景生成响应（用于模拟错误码）。
+ * - 返回 null 表示“正常流程继续走”
+ *
+ * @param scenario 由 `getScenario` 解析得到的场景
+ * @returns 若需要中断正常流程则返回对应的 `HttpResponse`；否则返回 null
+ */
 const scenarioResponse = (scenario: Scenario) => {
     if (scenario === 'error') {
         return HttpResponse.json({ message: 'Mocked 500' }, { status: 500 })
@@ -120,6 +191,12 @@ const scenarioResponse = (scenario: Scenario) => {
 }
 
 export const handlers = [
+    /**
+     * 获取会话列表。
+     * - 支持通过 `?scenario=...` 模拟错误/超时
+     *
+     * @returns `Conversation[]`（JSON）
+     */
     http.get('/api/conversations', async ({ request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
@@ -130,6 +207,14 @@ export const handlers = [
         return HttpResponse.json(store.conversations)
     }),
 
+    /**
+     * 创建新会话。
+     * - body: `{ title?: string }`
+     * - 默认标题：`新对话 N`（N 基于当前会话数量）
+     * - 会将新会话插入到列表头部，并初始化 messages 为空数组
+     *
+     * @returns `Conversation`（JSON，status 201）
+     */
     http.post('/api/conversations', async ({ request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
@@ -149,6 +234,13 @@ export const handlers = [
         return HttpResponse.json(newConv, { status: 201 })
     }),
 
+    /**
+     * 获取指定会话的消息列表。
+     * - 返回按 `createdAt` 升序排序后的列表（保证展示顺序稳定）
+     *
+     * @param id 会话 id（path param）
+     * @returns `ChatMessageModel[]`（JSON）
+     */
     http.get('/api/conversations/:id/messages', async ({ params, request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
@@ -163,6 +255,16 @@ export const handlers = [
         )
     }),
 
+    /**
+     * 向指定会话追加一条消息。
+     * - body: `{ text?: string; attachments?: ChatAttachment[]; role?: 'user' | 'assistant' }`
+     * - `text` 必填（trim 后不能为空）
+     * - 若会话不存在：会自动创建会话壳（title 使用 `对话 ${convId}`）
+     * - 附件会先经过 `sanitizeAttachment` 过滤无效项
+     *
+     * @param id 会话 id（path param）
+     * @returns `ChatMessageModel`（JSON，status 201）
+     */
     http.post('/api/conversations/:id/messages', async ({ params, request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
