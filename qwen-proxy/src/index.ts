@@ -17,8 +17,10 @@ interface Env {
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
-	'Access-Control-Allow-Headers': 'Content-Type',
+	'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 	'Access-Control-Allow-Methods': 'POST, OPTIONS',
+	// 如果前端需要读取自定义 header（如 request-id），可在这里补充
+	'Access-Control-Expose-Headers': '*',
 }
 
 export default {
@@ -48,6 +50,8 @@ export default {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${env.QWEN_API_KEY}`,
 			},
+			// 下游（浏览器）断开时能及时取消上游请求，避免浪费 token/连接
+			signal: request.signal,
 			body: JSON.stringify({
 				model: body?.model || 'qwen-turbo',
 				stream: body?.stream ?? false,
@@ -56,9 +60,10 @@ export default {
 		})
 
 		const headers = new Headers(upstream.headers)
-		headers.set('Access-Control-Allow-Origin', '*')
-		headers.set('Access-Control-Allow-Headers', 'Content-Type')
-		headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS')
+		headers.set('Access-Control-Allow-Origin', CORS_HEADERS['Access-Control-Allow-Origin'])
+		headers.set('Access-Control-Allow-Headers', CORS_HEADERS['Access-Control-Allow-Headers'])
+		headers.set('Access-Control-Allow-Methods', CORS_HEADERS['Access-Control-Allow-Methods'])
+		headers.set('Access-Control-Expose-Headers', CORS_HEADERS['Access-Control-Expose-Headers'])
 
 		return new Response(upstream.body, {
 			status: upstream.status,

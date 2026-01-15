@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from 'antd'
+import { StopOutlined } from '@ant-design/icons'
 import { UserMessage } from '../UserMessage/UserMessage'
 import { AiMessage } from '../AiMessage/AiMessage'
 import { ChatComposer } from '../ChatComposer/ChatComposer'
 import type { UploadFile } from 'antd'
 import styles from './ChatWindow.module.css'
-import type { ChatAttachment, ChatMessageModel } from '../../api/mockChatApi'
+import type { ChatAttachment, ChatMessageModel } from '../../model/chatTypes'
 
 
 interface ChatWindowProps {
@@ -12,8 +14,10 @@ interface ChatWindowProps {
     messages: ChatMessageModel[]
     value: string
     recording: boolean
+    aiReplying: boolean
     onChange: (next: string) => void
     onSend: () => void | Promise<void>
+    onStopGenerating: () => void
     onStartRecording: () => void
     onStopRecording: () => void
     files: UploadFile[]
@@ -26,18 +30,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     messages,
     value,
     recording,
+    aiReplying,
     onChange,
     onSend,
+    onStopGenerating,
     onStartRecording,
     onStopRecording,
     files,
     onFilesChange,
-    attachments,
 }) => {
     const headerRef = useRef<HTMLDivElement | null>(null)
     const [headerHeight, setHeaderHeight] = useState(0)
     const composerDockRef = useRef<HTMLDivElement | null>(null)
     const [composerHeight, setComposerHeight] = useState(0)
+    const scrollAreaRef = useRef<HTMLDivElement | null>(null)
 
     useEffect(() => {
         const el = composerDockRef.current
@@ -59,6 +65,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return { paddingTop: 24 + headerHeight, paddingBottom: 24 + composerHeight }
     }, [composerHeight, headerHeight])
 
+    // 自动滚动：仅在用户“接近底部”时才跟随（避免抢滚动）
+    useEffect(() => {
+        const el = scrollAreaRef.current
+        if (!el) return
+        const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+        if (distanceToBottom < 120) {
+            requestAnimationFrame(() => {
+                const node = scrollAreaRef.current
+                if (!node) return
+                node.scrollTop = node.scrollHeight
+            })
+        }
+    }, [messages])
+
     useEffect(() => {
         const el = headerRef.current
         if (!el) return
@@ -79,45 +99,42 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div ref={headerRef} className={styles.chatHeader}>
                     <div className={styles.chatHeaderInner}>
                         <div className={styles.chatTitle}>{title}</div>
+                        {aiReplying && (
+                            <Button
+                                danger
+                                size="small"
+                                className={styles.stopGeneratingButton}
+                                onClick={onStopGenerating}
+                                icon={<StopOutlined />}
+                            >
+                                中断
+                            </Button>
+                        )}
                     </div>
                 </div>
 
-                <div className={styles.messagesScrollArea} style={messagesStyle}>
+                <div ref={scrollAreaRef} className={styles.messagesScrollArea} style={messagesStyle}>
                     <div className={styles.messagesContent}>
                         {messages && messages.length === 0 ? (
                             <div className={styles.emptyState}>开始新的对话，支持文字/语音输入</div>
                         ) : (
-                            messages.map((record, index) => (
+                            messages.map((record) => (
                                 record.role === 'assistant' ? (
                                     <AiMessage
-                                        key={`${index}-${record.text.slice(0, 8)}`}
+                                        key={record.id}
                                         content={record.text}
                                         attachments={record.attachments}
+                                        loading={Boolean(record.isLoading)}
+                                        onStopGenerating={record.isLoading ? onStopGenerating : undefined}
                                     />
                                 ) : (
                                     <UserMessage
-                                        key={`${index}-${record.text.slice(0, 8)}`}
+                                        key={record.id}
                                         content={record.text}
                                         attachments={record.attachments}
                                     />
                                 )
                             ))
-                        )}
-
-                        {attachments && attachments.length > 0 && (
-                            <div className={styles.attachmentsPanel}>
-                                <div className={styles.attachmentsTitle}>已发送文件</div>
-                                <ul className={styles.attachmentsList}>
-                                    {attachments.map((file) => (
-                                        <li key={file.uid} className={styles.attachmentsItem}>
-                                            <span className={styles.attachmentsName}>{file.name}</span>
-                                            <span className={styles.attachmentsSize}>
-                                                {file.size !== undefined ? `${(file.size / 1024).toFixed(2)} KB` : '未知大小'}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
                         )}
                     </div>
                 </div>
@@ -127,8 +144,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <ChatComposer
                             value={value}
                             recording={recording}
+                            aiReplying={aiReplying}
                             onChange={onChange}
                             onSend={onSend}
+                            onStopGenerating={onStopGenerating}
                             onStartRecording={onStartRecording}
                             onStopRecording={onStopRecording}
                             files={files}

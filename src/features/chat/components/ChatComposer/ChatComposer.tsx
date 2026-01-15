@@ -1,7 +1,7 @@
 import React from 'react'
 import { Button, Input } from 'antd'
 import classNames from 'classnames'
-import { ArrowUpOutlined, AudioOutlined } from '@ant-design/icons'
+import { ArrowUpOutlined, AudioOutlined, StopOutlined } from '@ant-design/icons'
 import { ChatUpload } from '../ChatUpload/ChatUpload'
 import type { UploadFile } from 'antd'
 import styles from './ChatComposer.module.css'
@@ -9,8 +9,10 @@ import styles from './ChatComposer.module.css'
 interface ChatComposerProps {
     value: string
     recording: boolean
+    aiReplying: boolean
     onChange: (next: string) => void
     onSend: () => void
+    onStopGenerating: () => void
     onStartRecording: () => void
     onStopRecording: () => void
     files: UploadFile[]
@@ -20,8 +22,10 @@ interface ChatComposerProps {
 export const ChatComposer: React.FC<ChatComposerProps> = ({
     value,
     recording,
+    aiReplying,
     onChange,
     onSend,
+    onStopGenerating,
     onStartRecording,
     onStopRecording,
     files,
@@ -56,6 +60,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                             <Button
                                 shape="circle"
                                 onClick={onStartRecording}
+                                disabled={aiReplying}
                             >
                                 <AudioOutlined />
                             </Button>
@@ -66,10 +71,11 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                     <div className={chattingInputSendingCls}>
                         <Button
                             shape="circle"
-                            type="primary"
-                            onClick={recording ? () => { } : onSend}
+                            type={aiReplying ? 'default' : 'primary'}
+                            danger={aiReplying}
+                            onClick={recording ? () => { } : (aiReplying ? onStopGenerating : onSend)}
                         >
-                            <ArrowUpOutlined />
+                            {aiReplying ? <StopOutlined /> : <ArrowUpOutlined />}
                         </Button>
 
                     </div>

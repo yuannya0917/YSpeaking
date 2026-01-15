@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import classNames from 'classnames'
 import styles from './ChatSidebar.module.css'
-import type { Conversation } from '../../api/mockChatApi'
+import type { Conversation } from '../../model/chatTypes'
 
 interface ChatSidebarItemProps {
     conversation: Conversation

@@ -3,7 +3,7 @@ import { Button } from 'antd'
 import { PlusOutlined } from '@ant-design/icons'
 import styles from './ChatSidebar.module.css'
 import { ChatSidebarItem } from './ChatSidebarItem'
-import type { Conversation } from '../../api/mockChatApi'
+import type { Conversation } from '../../model/chatTypes'
 
 interface ChatSidebarProps {
     conversations: Conversation[]

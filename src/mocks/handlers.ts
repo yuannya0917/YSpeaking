@@ -1,5 +1,5 @@
 import { http, HttpResponse, delay } from 'msw'
-import type { Conversation, ChatAttachment, ChatMessageModel } from '../features/chat/api/mockChatApi'
+import type { Conversation, ChatAttachment, ChatMessageModel } from '../features/chat/model/chatTypes'
 
 /**
  * 获取当前时间的 ISO 字符串。

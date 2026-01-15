@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import { useRef } from "react";
 import Recorder from "recorder-core";
 import "recorder-core/src/engine/wav.js"; // wav 支持
 
