@@ -1,4 +1,5 @@
-const API_BASE = '/api'
+const baseUrl = import.meta.env.BASE_URL || '/'
+export const API_BASE = `${baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl}/api`
 
 export const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const res = await fetch(`${API_BASE}${path}`, {

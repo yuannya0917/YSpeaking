@@ -1,6 +1,6 @@
 import type { UploadFile } from 'antd'
 import type { ChatAttachment, ChatMessageModel, Conversation } from '../model/chatTypes'
-import { request } from './http'
+import { API_BASE, request } from './http'
 
 interface SendMessagePayload {
   text: string
@@ -59,7 +59,7 @@ export const uploadAttachments = async (files: UploadFile[]): Promise<ChatAttach
   })
   form.append('meta', JSON.stringify(meta))
 
-  const res = await fetch(`/api/uploads`, {
+  const res = await fetch(`${API_BASE}/uploads`, {
     method: 'POST',
     body: form,
   })

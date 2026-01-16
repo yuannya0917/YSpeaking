@@ -1,6 +1,8 @@
 import { http, HttpResponse, delay } from 'msw'
 import type { Conversation, ChatAttachment, ChatMessageModel } from '../features/chat/model/chatTypes'
 
+const API_PREFIX = `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/api`
+
 /**
  * 获取当前时间的 ISO 字符串。
  * - 用于 mock 数据的 `createdAt` 字段，保持格式统一、便于排序/展示。
@@ -197,7 +199,7 @@ export const handlers = [
      *
      * @returns `Conversation[]`（JSON）
      */
-    http.get('/api/conversations', async ({ request }) => {
+    http.get(`${API_PREFIX}/conversations`, async ({ request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
         await maybeSimulate(scenario)
@@ -215,7 +217,7 @@ export const handlers = [
      *
      * @returns `Conversation`（JSON，status 201）
      */
-    http.post('/api/conversations', async ({ request }) => {
+    http.post(`${API_PREFIX}/conversations`, async ({ request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
         await maybeSimulate(scenario)
@@ -240,7 +242,7 @@ export const handlers = [
      * @param id 会话 id（path param）
      * @returns 204 无内容
      */
-    http.delete('/api/conversations/:id', async ({ params, request }) => {
+    http.delete(`${API_PREFIX}/conversations/:id`, async ({ params, request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
         await maybeSimulate(scenario)
@@ -263,7 +265,7 @@ export const handlers = [
      * @param id 会话 id（path param）
      * @returns 更新后的 `Conversation`
      */
-    http.patch('/api/conversations/:id', async ({ params, request }) => {
+    http.patch(`${API_PREFIX}/conversations/:id`, async ({ params, request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
         await maybeSimulate(scenario)
@@ -292,7 +294,7 @@ export const handlers = [
      * 上传附件，返回带 url 的精简附件列表。
      * - body: FormData，包含多文件字段 `files` 以及元信息 `meta`（JSON 字符串）
      */
-    http.post('/api/uploads', async ({ request }) => {
+    http.post(`${API_PREFIX}/uploads`, async ({ request }) => {
         await ensureStoreLoaded()
         const formData = await request.formData().catch(() => null)
         if (!formData) {
@@ -336,7 +338,7 @@ export const handlers = [
      * @param id 会话 id（path param）
      * @returns `ChatMessageModel[]`（JSON）
      */
-    http.get('/api/conversations/:id/messages', async ({ params, request }) => {
+    http.get(`${API_PREFIX}/conversations/:id/messages`, async ({ params, request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
         await maybeSimulate(scenario)
@@ -360,7 +362,7 @@ export const handlers = [
      * @param id 会话 id（path param）
      * @returns `ChatMessageModel`（JSON，status 201）
      */
-    http.post('/api/conversations/:id/messages', async ({ params, request }) => {
+    http.post(`${API_PREFIX}/conversations/:id/messages`, async ({ params, request }) => {
         await ensureStoreLoaded()
         const scenario = getScenario(request.url)
         await maybeSimulate(scenario)

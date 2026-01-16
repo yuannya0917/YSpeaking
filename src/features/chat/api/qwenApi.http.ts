@@ -1,6 +1,7 @@
 import type { ChatCompletionMessage } from '../model/chatTypes'
 
-const AI_PROXY_URL = import.meta.env.VITE_QWEN_PROXY_URL
+const AI_PROXY_URL =
+  import.meta.env.VITE_QWEN_PROXY_URL || 'https://qwen-proxy.yspeaking.workers.dev'
 const DEFAULT_QWEN_MODEL = import.meta.env.VITE_QWEN_MODEL || 'qwen-vl-plus'
 
 type StreamCallbacks = {

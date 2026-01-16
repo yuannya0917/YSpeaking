@@ -5,11 +5,11 @@ import './styles/index.css'
 import ChatPage from './pages/ChatPage/ChatPage.tsx'
 
 const prepareMocks = async () => {
-  if (import.meta.env.DEV) {
+  if (import.meta.env.DEV || import.meta.env.PROD) {
     const { worker } = await import('./mocks/browser')
     await worker.start({
       onUnhandledRequest: 'bypass',
-      serviceWorker: { url: '/mockServiceWorker.js' },
+      serviceWorker: { url: `${import.meta.env.BASE_URL}mockServiceWorker.js` },
     })
   }
 }
