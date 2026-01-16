@@ -65,18 +65,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return { paddingTop: 24 + headerHeight, paddingBottom: 24 + composerHeight }
     }, [composerHeight, headerHeight])
 
-    // 自动滚动：仅在用户“接近底部”时才跟随（避免抢滚动）
     useEffect(() => {
-        const el = scrollAreaRef.current
-        if (!el) return
-        const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-        if (distanceToBottom < 120) {
-            requestAnimationFrame(() => {
-                const node = scrollAreaRef.current
-                if (!node) return
-                node.scrollTop = node.scrollHeight
-            })
-        }
+        requestAnimationFrame(() => {
+            const node = scrollAreaRef.current
+            if (!node) return
+            node.scrollTop = node.scrollHeight
+        })
     }, [messages])
 
     useEffect(() => {

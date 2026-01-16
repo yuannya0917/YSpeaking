@@ -37,6 +37,14 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
     )
     const chattingInputSendingCls = classNames(styles.chattingInputSending)
 
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.key !== 'Enter' || event.shiftKey) return
+        if ((event.nativeEvent as KeyboardEvent).isComposing) return
+        if (recording || aiReplying) return
+        event.preventDefault()
+        onSend()
+    }
+
     return (
         <div className={styles.inputArea}>
             <ChatUpload files={files} onFilesChange={onFilesChange} />
@@ -48,6 +56,7 @@ export const ChatComposer: React.FC<ChatComposerProps> = ({
                         autoSize={{ minRows: 1 }}
                         value={value}
                         onChange={(e) => onChange(e.target.value)}
+                        onKeyDown={handleKeyDown}
                     />
                 </div>
                 <div className={styles.chattingInputActions}>

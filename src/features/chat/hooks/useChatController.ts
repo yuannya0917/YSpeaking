@@ -34,6 +34,7 @@ export function useChatController() {
   const activeStreamAbortRef = useRef<AbortController | null>(null)
   // 当前流属于哪个会话（防止用户切换会话后把 delta 写错地方）
   const activeStreamConversationIdRef = useRef<string | null>(null)
+  const lastDraftRef = useRef<{ value: string; files: UploadFile[] } | null>(null)
 
   // 初次加载会话列表
   useEffect(() => {
@@ -85,7 +86,10 @@ export function useChatController() {
     }
   }, [])
 
+  const userStoppedRef = useRef(false)
+
   const stopGenerating = () => {
+    userStoppedRef.current = true
     // 立刻让 UI 退出“生成中”（按钮/状态更跟手），实际中断由 abort 完成
     setAiReplying(false)
 
@@ -102,6 +106,16 @@ export function useChatController() {
 
     activeStreamAbortRef.current?.abort()
     activeStreamAbortRef.current = null
+
+    const lastDraft = lastDraftRef.current
+    if (lastDraft) {
+      setValue(lastDraft.value)
+      setDraftsByConversation((prev) => ({
+        ...prev,
+        [activeConversationId]: lastDraft.value,
+      }))
+      setUploadedFiles(lastDraft.files)
+    }
   }
 
   // 切换会话时同步草稿到输入框
@@ -200,11 +214,15 @@ export function useChatController() {
   const handleSend = async () => {
     if (aiReplying) return
     const text = value.trim()
-    const hasFiles = uploadedFiles.length > 0
+    const valueToRestore = value
+    const filesToSend = uploadedFiles
+    const hasFiles = filesToSend.length > 0
     if (!text && !hasFiles) return
     if (!activeConversationId) return
     const conversationId = activeConversationId
 
+    userStoppedRef.current = false
+    lastDraftRef.current = { value: valueToRestore, files: filesToSend }
     setAiReplying(true)
     const loadingMessageId = `loading-${Date.now()}-${Math.random().toString(16).slice(2)}`
     lastLoadingIdRef.current = loadingMessageId
@@ -215,7 +233,7 @@ export function useChatController() {
     try {
       let attachmentsToSend: ChatAttachment[] | undefined
       if (hasFiles) {
-        attachmentsToSend = await uploadAttachments(uploadedFiles)
+        attachmentsToSend = await uploadAttachments(filesToSend)
         if (!attachmentsToSend || attachmentsToSend.length === 0) {
           throw new Error('上传附件失败或未返回文件信息')
         }
@@ -229,7 +247,7 @@ export function useChatController() {
 
       const userContentChunks = await buildUserContentChunks({
         textToSend,
-        uploadedFiles,
+        uploadedFiles: filesToSend,
       })
 
       const savedMessage = await sendMessage(conversationId, {
@@ -237,6 +255,13 @@ export function useChatController() {
         attachments: attachmentsToSend,
         role: 'user',
       })
+
+      setValue('')
+      setDraftsByConversation((prev) => ({
+        ...prev,
+        [activeConversationId]: '',
+      }))
+      setUploadedFiles([])
 
       setConversationMessages((prev) => {
         const current = prev[conversationId] || []
@@ -322,16 +347,10 @@ export function useChatController() {
         }
       })
 
-      setValue('')
-      setDraftsByConversation((prev) => ({
-        ...prev,
-        [activeConversationId]: '',
-      }))
-      setUploadedFiles([])
     } catch (error) {
       const err = error as { name?: string; message?: string }
       const aborted = err?.name === 'AbortError'
-      if (aborted) {
+      if (aborted && userStoppedRef.current) {
         // 用户主动停止生成：保留已生成部分，把 loading 状态置为 false
         const loadingId = lastLoadingIdRef.current
         if (loadingId) {
@@ -343,21 +362,49 @@ export function useChatController() {
         }
       } else {
         console.error('发送或生成回复失败', error)
-        const idToRemove = lastLoadingIdRef.current
-        if (idToRemove) {
-          setConversationMessages((prev) => {
-            const current = prev[conversationId] || []
-            return {
-              ...prev,
-              [conversationId]: current.filter((m) => m.id !== idToRemove),
+        const errorText = `AI 回复失败${err?.message ? `：${err.message}` : '，请稍后重试。'}`
+        const loadingId = lastLoadingIdRef.current
+        setConversationMessages((prev) => {
+          const current = prev[conversationId] || []
+          const loadingIndex = loadingId
+            ? current.findIndex((m) => m.id === loadingId)
+            : -1
+          if (loadingIndex >= 0) {
+            const next = [...current]
+            next[loadingIndex] = {
+              ...next[loadingIndex],
+              role: 'assistant',
+              text: errorText,
+              isLoading: false,
             }
-          })
+            return { ...prev, [conversationId]: next }
+          }
+
+          const errorMessage: ChatMessageModel = {
+            id: `error-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            conversationId,
+            role: 'assistant',
+            text: errorText,
+            createdAt: new Date().toISOString(),
+          }
+          return { ...prev, [conversationId]: [...current, errorMessage] }
+        })
+
+        const lastDraft = lastDraftRef.current
+        if (lastDraft) {
+          setValue(lastDraft.value)
+          setDraftsByConversation((prev) => ({
+            ...prev,
+            [activeConversationId]: lastDraft.value,
+          }))
+          setUploadedFiles(lastDraft.files)
         }
       }
     } finally {
       lastLoadingIdRef.current = null
       activeStreamAbortRef.current = null
       activeStreamConversationIdRef.current = null
+      lastDraftRef.current = null
       setAiReplying(false)
     }
   }

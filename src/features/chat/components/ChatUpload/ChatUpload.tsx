@@ -24,6 +24,10 @@ export const ChatUpload: React.FC<ChatUploadProps> = ({ files, onFilesChange }) 
     onFilesChange((prev) => [...prev, ...newFiles]);
   };
 
+  const handleRemoveFile = (uid: string) => {
+    onFilesChange((prev) => prev.filter((file) => file.uid !== uid));
+  };
+
   useEffect(() => {
     const handleDragOver = (e: DragEvent) => {
       e.preventDefault();
@@ -100,10 +104,20 @@ export const ChatUpload: React.FC<ChatUploadProps> = ({ files, onFilesChange }) 
             <li
               className={styles.chattingUploadFileItem}
               key={file.uid}>
+              <div className={styles.chattingUploadFileInfo}>
                 <span className={styles.chattingUploadFileName}>{file.name}</span>
                 <span className={styles.chattingUploadFileSize}>
                   {file.size !== undefined ? `${(file.size / 1024).toFixed(2)} KB` : '未知大小'}
                 </span>
+              </div>
+              <button
+                type="button"
+                className={styles.chattingUploadFileRemove}
+                onClick={() => handleRemoveFile(file.uid)}
+                aria-label={`移除${file.name}`}
+              >
+                ×
+              </button>
             </li>
           ))}
         </ul>
