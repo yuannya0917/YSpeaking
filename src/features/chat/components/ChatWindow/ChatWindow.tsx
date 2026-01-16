@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from 'antd'
-import { StopOutlined } from '@ant-design/icons'
+import { DownOutlined, StopOutlined } from '@ant-design/icons'
 import { UserMessage } from '../UserMessage/UserMessage'
 import { AiMessage } from '../AiMessage/AiMessage'
 import { ChatComposer } from '../ChatComposer/ChatComposer'
@@ -11,6 +11,7 @@ import type { ChatAttachment, ChatMessageModel } from '../../model/chatTypes'
 
 interface ChatWindowProps {
     title?: string
+    conversationId?: string
     messages: ChatMessageModel[]
     value: string
     recording: boolean
@@ -27,6 +28,7 @@ interface ChatWindowProps {
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
     title = '当前对话',
+    conversationId,
     messages,
     value,
     recording,
@@ -44,6 +46,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const composerDockRef = useRef<HTMLDivElement | null>(null)
     const [composerHeight, setComposerHeight] = useState(0)
     const scrollAreaRef = useRef<HTMLDivElement | null>(null)
+    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true)
+    const [visibleStartIndex, setVisibleStartIndex] = useState(0)
+    const pendingAdjustRef = useRef<{ prevHeight: number; prevTop: number } | null>(null)
+    const lazyInitializedRef = useRef(false)
+
+    const LAZY_THRESHOLD = 60
+    const INITIAL_RENDER_COUNT = 40
+    const LOAD_MORE_STEP = 20
+    const NEAR_BOTTOM_PX = 120
+    const JUMP_BOTTOM_OFFSET_PX = 40
+    const LOAD_MORE_TRIGGER_PX = 80
 
     useEffect(() => {
         const el = composerDockRef.current
@@ -65,13 +78,83 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         return { paddingTop: 24 + headerHeight, paddingBottom: 24 + composerHeight }
     }, [composerHeight, headerHeight])
 
+    const displayedMessages = useMemo(() => {
+        if (messages.length <= LAZY_THRESHOLD) return messages
+        return messages.slice(visibleStartIndex)
+    }, [messages, visibleStartIndex])
+
     useEffect(() => {
+        if (!conversationId) return
+        lazyInitializedRef.current = false
+        if (messages.length <= LAZY_THRESHOLD) {
+            setVisibleStartIndex(0)
+            setAutoScrollEnabled(true)
+            return
+        }
+        setVisibleStartIndex(Math.max(messages.length - INITIAL_RENDER_COUNT, 0))
+        lazyInitializedRef.current = true
+        setAutoScrollEnabled(true)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId])
+
+    useEffect(() => {
+        if (messages.length <= LAZY_THRESHOLD) {
+            setVisibleStartIndex(0)
+            lazyInitializedRef.current = false
+            return
+        }
+        if (!lazyInitializedRef.current) {
+            setVisibleStartIndex(Math.max(messages.length - INITIAL_RENDER_COUNT, 0))
+            lazyInitializedRef.current = true
+        }
+    }, [messages.length, visibleStartIndex])
+
+    useEffect(() => {
+        const node = scrollAreaRef.current
+        if (!node) return
+
         requestAnimationFrame(() => {
-            const node = scrollAreaRef.current
-            if (!node) return
-            node.scrollTop = node.scrollHeight
+            const pending = pendingAdjustRef.current
+            if (pending) {
+                const nextHeight = node.scrollHeight
+                node.scrollTop = pending.prevTop + (nextHeight - pending.prevHeight)
+                pendingAdjustRef.current = null
+                return
+            }
+            if (autoScrollEnabled) {
+                node.scrollTop = node.scrollHeight
+            }
         })
-    }, [messages])
+    }, [displayedMessages.length, autoScrollEnabled, visibleStartIndex])
+
+    const handleJumpToBottom = () => {
+        const node = scrollAreaRef.current
+        if (!node) return
+        node.scrollTop = Math.max(node.scrollHeight - node.clientHeight - JUMP_BOTTOM_OFFSET_PX, 0)
+        setAutoScrollEnabled(true)
+    }
+
+    useEffect(() => {
+        const node = scrollAreaRef.current
+        if (!node) return
+
+        const onScroll = () => {
+            const distanceToBottom = node.scrollHeight - node.scrollTop - node.clientHeight
+            setAutoScrollEnabled(distanceToBottom <= NEAR_BOTTOM_PX)
+
+            if (
+                messages.length > LAZY_THRESHOLD &&
+                node.scrollTop <= LOAD_MORE_TRIGGER_PX &&
+                visibleStartIndex > 0
+            ) {
+                pendingAdjustRef.current = { prevHeight: node.scrollHeight, prevTop: node.scrollTop }
+                setVisibleStartIndex((prev) => Math.max(prev - LOAD_MORE_STEP, 0))
+            }
+        }
+
+        node.addEventListener('scroll', onScroll)
+        return () => node.removeEventListener('scroll', onScroll)
+    }, [messages.length, visibleStartIndex])
 
     useEffect(() => {
         const el = headerRef.current
@@ -112,7 +195,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         {messages && messages.length === 0 ? (
                             <div className={styles.emptyState}>开始新的对话，支持文字/语音输入</div>
                         ) : (
-                            messages.map((record) => (
+                            displayedMessages.map((record) => (
                                 record.role === 'assistant' ? (
                                     <AiMessage
                                         key={record.id}
@@ -132,6 +215,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         )}
                     </div>
                 </div>
+
+                {!autoScrollEnabled && (
+                    <Button
+                        type="primary"
+                        size="large"
+                        shape="circle"
+                        className={styles.jumpToBottomButton}
+                        onClick={handleJumpToBottom}
+                        icon={<DownOutlined />}
+                        aria-label="跳到底部"
+                        style={{ bottom: composerHeight + 16 }}
+                    >
+                    </Button>
+                )}
 
                 <div ref={composerDockRef} className={styles.composerDock}>
                     <div className={styles.composerInner}>

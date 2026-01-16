@@ -29,6 +29,14 @@ const fileToText = (file: RcFile, maxLen = 4000) =>
     reader.readAsText(file)
   })
 
+let mammothLoader: Promise<typeof import('mammoth/mammoth.browser.js')> | null = null
+const loadMammoth = () => {
+  if (!mammothLoader) {
+    mammothLoader = import('mammoth/mammoth.browser.js')
+  }
+  return mammothLoader
+}
+
 export const truncateWithNotice = (text: string, maxLen = 4000) => {
   if (text.length <= maxLen) return text
   return `${text.slice(0, maxLen)}\n\n……(已截断，原文长度约 ${text.length} 字符)`
@@ -83,7 +91,7 @@ export const buildDocumentContents = async (files: UploadFile[]): Promise<ChatCo
   )
 
   if (docxLike.length > 0) {
-    const mammoth = (await import('mammoth/mammoth.browser.js')) as typeof import('mammoth/mammoth.browser.js')
+    const mammoth = (await loadMammoth()) as typeof import('mammoth/mammoth.browser.js')
     for (const doc of docxLike) {
       try {
         const buffer = await fileToArrayBuffer(doc.originFileObj as RcFile)

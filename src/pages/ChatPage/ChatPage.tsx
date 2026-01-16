@@ -40,6 +40,7 @@ const ChatPage: React.FC = () => {
 
             <ChatWindow
                 title={activeConversation?.title || '当前对话'}
+                conversationId={activeConversationId}
                 messages={messages}
                 value={value}
                 recording={recording}

@@ -12,10 +12,27 @@ const API_PREFIX = `${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/api`
 const nowIso = () => new Date().toISOString()
 
 /**
+ * 生成用于滚动/懒加载测试的消息列表。
+ */
+const buildSampleMessages = (conversationId: string, count: number): ChatMessageModel[] => {
+    const base = Date.now() - count * 60_000
+    return Array.from({ length: count }, (_, index) => {
+        const role = index % 2 === 0 ? 'user' : 'assistant'
+        return {
+            id: `msg-${conversationId}-${index + 1}`,
+            conversationId,
+            text: role === 'user' ? `用户测试消息 ${index + 1}` : `AI 测试回复 ${index + 1}`,
+            role,
+            createdAt: new Date(base + index * 60_000).toISOString(),
+        }
+    })
+}
+
+/**
  * 缓存名称：用于在浏览器 Cache Storage 中持久化 mock 的对话/消息数据。
  * - 版本号变更可以用于“自然清空”旧缓存。
  */
-const CACHE_NAME = 'yspeaking-mock-chat-cache-v1'
+const CACHE_NAME = 'yspeaking-mock-chat-cache-v2'
 
 /**
  * 缓存 key：用一个固定的 Request 作为 cache 的索引。
@@ -51,7 +68,7 @@ const defaultStore: {
                 createdAt: nowIso(),
             },
         ],
-        'conv-3': [],
+        'conv-3': buildSampleMessages('conv-3', 80),
     },
 }
 
