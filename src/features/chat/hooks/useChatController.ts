@@ -3,6 +3,7 @@ import type { UploadFile } from 'antd'
 import {
   createConversation,
   deleteConversation,
+  generateAssistantReply,
   generateAssistantReplyStream,
   listConversations,
   listMessages,
@@ -309,23 +310,32 @@ export function useChatController() {
       })
 
       // 流式：边接收边把内容追加到 loading 消息
-      const aiText = await generateAssistantReplyStream(llmMessages, {
-        signal: abortController.signal,
-        onDelta: (delta) => {
-          if (abortController.signal.aborted) return
-          setConversationMessages((prev) => {
-            const current = prev[conversationId] || []
-            const next = current.map((m) =>
-              m.id === loadingMessageId ? { ...m, text: `${m.text || ''}${delta}` } : m
-            )
-            return { ...prev, [conversationId]: next }
-          })
-        },
-        onError: (err) => {
-          // 某些上游会发非 JSON 的 data 行，这里只做 debug，不中断主流程
-          console.debug('stream chunk parse error', err)
-        },
-      })
+      let aiText = ''
+      try {
+        aiText = await generateAssistantReplyStream(llmMessages, {
+          signal: abortController.signal,
+          onDelta: (delta) => {
+            if (abortController.signal.aborted) return
+            setConversationMessages((prev) => {
+              const current = prev[conversationId] || []
+              const next = current.map((m) =>
+                m.id === loadingMessageId ? { ...m, text: `${m.text || ''}${delta}` } : m
+              )
+              return { ...prev, [conversationId]: next }
+            })
+          },
+          onError: (err) => {
+            // 某些上游会发非 JSON 的 data 行，这里只做 debug，不中断主流程
+            console.debug('stream chunk parse error', err)
+          },
+        })
+      } catch (error) {
+        const err = error as { name?: string }
+        const aborted = err?.name === 'AbortError'
+        if (aborted || userStoppedRef.current) throw error
+        console.warn('stream failed, fallback to non-stream', error)
+        aiText = await generateAssistantReply(llmMessages)
+      }
       const aiMessage = await sendMessage(conversationId, {
         text: aiText,
         role: 'assistant',

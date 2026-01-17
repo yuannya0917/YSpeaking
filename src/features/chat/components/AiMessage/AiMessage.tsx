@@ -198,6 +198,7 @@ export const AiMessage: React.FC<AiMessageProps> = ({
     }
     utter.onerror = () => {
       if (speakTokenRef.current === token) setSpeaking(false)
+      message.error('朗读失败，请重试')
     }
 
     setSpeaking(true)

@@ -79,6 +79,17 @@
     padding: 0 24px;
 }
 
+.offlineBanner {
+    margin: 12px 0 16px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #fff7e6;
+    border: 1px solid #ffd591;
+    color: #ad6800;
+    font-size: 13px;
+    text-align: center;
+}
+
 .composerDock {
     position: absolute;
     left: 0;

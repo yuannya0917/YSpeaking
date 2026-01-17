@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { message } from 'antd'
 
 type SpeechRecognitionCtor = new () => SpeechRecognition
 
@@ -85,6 +86,7 @@ export function useSpeechDictation(params: {
 
     recognition.onerror = (e: any) => {
       console.error('SpeechRecognition error:', e)
+      message.error('语音识别出错，请重试')
       setRecording(false)
     }
 
@@ -106,6 +108,7 @@ export function useSpeechDictation(params: {
       setRecording(true)
     } catch (e) {
       console.error('SpeechRecognition start failed:', e)
+      message.error('语音识别启动失败，请重试')
       setRecording(false)
     }
   }

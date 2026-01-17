@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from 'antd'
+import { Button, message } from 'antd'
 import { DownOutlined, StopOutlined } from '@ant-design/icons'
 import { UserMessage } from '../UserMessage/UserMessage'
 import { AiMessage } from '../AiMessage/AiMessage'
@@ -50,6 +50,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const [visibleStartIndex, setVisibleStartIndex] = useState(0)
     const pendingAdjustRef = useRef<{ prevHeight: number; prevTop: number } | null>(null)
     const lazyInitializedRef = useRef(false)
+    const [isOnline, setIsOnline] = useState(() => navigator.onLine)
 
     const LAZY_THRESHOLD = 60
     const INITIAL_RENDER_COUNT = 40
@@ -127,6 +128,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         })
     }, [displayedMessages.length, autoScrollEnabled, visibleStartIndex])
 
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOnline(true)
+            message.success('网络已恢复')
+        }
+        const handleOffline = () => {
+            setIsOnline(false)
+            message.warning('网络已断开')
+        }
+
+        window.addEventListener('online', handleOnline)
+        window.addEventListener('offline', handleOffline)
+        return () => {
+            window.removeEventListener('online', handleOnline)
+            window.removeEventListener('offline', handleOffline)
+        }
+    }, [])
+
     const handleJumpToBottom = () => {
         const node = scrollAreaRef.current
         if (!node) return
@@ -192,6 +211,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                 <div ref={scrollAreaRef} className={styles.messagesScrollArea} style={messagesStyle}>
                     <div className={styles.messagesContent}>
+                        {!isOnline && (
+                            <div className={styles.offlineBanner}>网络已断开，正在离线状态</div>
+                        )}
                         {messages && messages.length === 0 ? (
                             <div className={styles.emptyState}>开始新的对话，支持文字/语音输入</div>
                         ) : (

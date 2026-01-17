@@ -1,6 +1,6 @@
 import type { UploadFile } from 'antd'
 import type { ChatAttachment, ChatMessageModel, Conversation } from '../model/chatTypes'
-import { API_BASE, request } from './http'
+import { API_BASE, fetchWithRetry, request } from './http'
 
 interface SendMessagePayload {
   text: string
@@ -59,9 +59,12 @@ export const uploadAttachments = async (files: UploadFile[]): Promise<ChatAttach
   })
   form.append('meta', JSON.stringify(meta))
 
-  const res = await fetch(`${API_BASE}/uploads`, {
+  const res = await fetchWithRetry(`${API_BASE}/uploads`, {
     method: 'POST',
     body: form,
+  }, {
+    timeoutMs: 20_000,
+    retry: 1,
   })
   if (!res.ok) {
     const text = await res.text().catch(() => '')

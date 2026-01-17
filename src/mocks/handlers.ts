@@ -47,7 +47,7 @@ const defaultStore: {
     conversations: [
         { id: 'conv-1', title: '新对话 1', createdAt: nowIso() },
         { id: 'conv-2', title: '项目需求讨论', createdAt: nowIso() },
-        { id: 'conv-3', title: '语音测试', createdAt: nowIso() },
+        { id: 'conv-3', title: '智能滚动测试', createdAt: nowIso() },
     ],
     messages: {
         'conv-1': [

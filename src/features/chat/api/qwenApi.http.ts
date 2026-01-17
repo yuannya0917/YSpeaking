@@ -3,11 +3,85 @@ import type { ChatCompletionMessage } from '../model/chatTypes'
 const AI_PROXY_URL =
   import.meta.env.VITE_QWEN_PROXY_URL || 'https://qwen-proxy.yspeaking.workers.dev'
 const DEFAULT_QWEN_MODEL = import.meta.env.VITE_QWEN_MODEL || 'qwen-vl-plus'
+const DEFAULT_TIMEOUT_MS = 20_000
+const DEFAULT_RETRY = 1
+const DEFAULT_RETRY_DELAY_MS = 600
 
 type StreamCallbacks = {
   onDelta?: (delta: string) => void
   onError?: (error: Error) => void
   onDone?: () => void
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const isRetryableStatus = (status: number) =>
+  status === 408 || status === 425 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504
+
+const fetchWithTimeout = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+) => {
+  const controller = new AbortController()
+  let timedOut = false
+
+  if (init?.signal) {
+    if (init.signal.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    init.signal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
+  const timer = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    })
+  } catch (error) {
+    if (timedOut) {
+      const err = new Error(`Request timeout after ${timeoutMs}ms`)
+      ;(err as Error & { name?: string }).name = 'TimeoutError'
+      throw err
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const fetchWithRetry = async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  options?: { timeoutMs?: number; retry?: number; retryDelayMs?: number }
+) => {
+  const maxRetry = options?.retry ?? DEFAULT_RETRY
+  const retryDelay = options?.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS
+  let attempt = 0
+
+  while (true) {
+    try {
+      const res = await fetchWithTimeout(input, init, options?.timeoutMs)
+      if (!isRetryableStatus(res.status) || attempt >= maxRetry) {
+        return res
+      }
+    } catch (error) {
+      const err = error as { name?: string }
+      const retryable =
+        err?.name === 'TimeoutError' ||
+        (err?.name !== 'AbortError' && error instanceof TypeError)
+      if (!retryable || attempt >= maxRetry) {
+        throw error
+      }
+    }
+    attempt += 1
+    await sleep(retryDelay * Math.pow(2, attempt - 1))
+  }
 }
 
 /**
@@ -38,7 +112,7 @@ export const generateAssistantReplyStream = async (
     throw new Error('缺少 Qwen 代理地址，请设置 VITE_QWEN_PROXY_URL')
   }
 
-  const res = await fetch(AI_PROXY_URL, {
+  const res = await fetchWithRetry(AI_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     signal: params?.signal,
@@ -47,6 +121,9 @@ export const generateAssistantReplyStream = async (
       stream: true,
       messages,
     }),
+  }, {
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    retry: DEFAULT_RETRY,
   })
 
   if (!res.ok) {
@@ -134,7 +211,7 @@ export const generateAssistantReply = async (
     throw new Error('缺少 Qwen 代理地址，请设置 VITE_QWEN_PROXY_URL')
   }
 
-  const res = await fetch(AI_PROXY_URL, {
+  const res = await fetchWithRetry(AI_PROXY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -142,6 +219,9 @@ export const generateAssistantReply = async (
       stream: false,
       messages,
     }),
+  }, {
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    retry: DEFAULT_RETRY,
   })
 
   if (!res.ok) {

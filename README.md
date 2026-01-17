@@ -2,6 +2,15 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## 密钥与环境变量
+
+- 前端（Vite）请在本地创建 `.env.local`，不要提交到 GitHub。
+  - `VITE_QWEN_PROXY_URL`：Qwen 代理地址
+  - `VITE_QWEN_MODEL`：默认模型（可选）
+- 代理服务（`qwen-proxy`）的密钥不要写入代码或提交到 GitHub：
+  - 线上部署：使用 `wrangler secret put QWEN_API_KEY`
+  - 本地开发：在 `qwen-proxy/.dev.vars` 中设置 `QWEN_API_KEY`（该文件已在 `.gitignore` 中忽略）
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
